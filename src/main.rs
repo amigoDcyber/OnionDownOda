@@ -1,0 +1,153 @@
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{backend::CrosstermBackend, Terminal};
+use std::io;
+use std::panic;
+use std::time::Duration;
+use tokio::sync::mpsc;
+
+mod app;
+mod banner;
+mod config;
+mod downloader;
+mod error;
+mod tor;
+mod ui;
+
+use app::{Action, App};
+use config::Config;
+
+fn setup_panic_hook() {
+    let original_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |info| {
+        // Restore terminal before printing panic message
+        let _ = disable_raw_mode();
+        let _ = execute!(
+            io::stdout(),
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        );
+        original_hook(info);
+    }));
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    setup_panic_hook();
+    
+    let config = Config::load();
+
+    // ── Setup terminal ─────────────────────────────
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    // ── Create app state ───────────────────────────
+    let mut app = App::new(config.proxy.clone(), config.output_dir.clone());
+
+    // ── Check Tor connectivity ─────────────────────
+    app.add_log(&format!("Checking Tor proxy at {}...", config.proxy));
+    app.tor_connected = tor::check_tor_connection(&config.proxy).await;
+    if app.tor_connected {
+        app.add_log("🧅 Connected to Tor SOCKS5 proxy");
+    } else {
+        app.add_log("⚠ Tor proxy not available — start tor service to download");
+    }
+
+    // ── Main event loop ────────────────────────────
+    let result = run_app(&mut terminal, &mut app).await;
+
+    // ── Restore terminal ───────────────────────────
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
+
+    if let Err(e) = result {
+        eprintln!("Error: {}", e);
+    }
+
+    Ok(())
+}
+
+async fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &mut App,
+) -> Result<(), Box<dyn std::error::Error>> {
+    loop {
+        terminal.draw(|f| ui::draw(f, app))?;
+
+        // Poll for keyboard events (50ms tick for responsive UI updates)
+        if event::poll(Duration::from_millis(50))? {
+            if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    let action = app.handle_key(key);
+                    match action {
+                        Action::StartDownload(url) => {
+                            let (tx, rx) = mpsc::unbounded_channel();
+                            app.start_download(&url, rx);
+                            app.add_log(&format!("🔗 Connecting to {}...", &url));
+
+                            let client = match tor::build_client(&app.proxy_addr) {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    app.add_log(&format!("❌ Client error: {}", e));
+                                    continue;
+                                }
+                            };
+
+                            let output_dir = app.output_dir.clone();
+                            let url_clone = url.clone();
+                            let paused_flag = app.paused.clone();
+                            tokio::spawn(async move {
+                                let _ = downloader::download_file(
+                                    &client,
+                                    &url_clone,
+                                    &output_dir,
+                                    tx,
+                                    paused_flag,
+                                )
+                                .await;
+                            });
+                        }
+                        Action::Quit => {
+                            app.should_quit = true;
+                            break;
+                        }
+                        Action::Pause => {
+                            app.pause_download();
+                        }
+                        Action::Resume => {
+                            app.resume_download();
+                        }
+                        Action::OpenUrl(url) => {
+                            if let Err(e) = webbrowser::open(&url) {
+                                app.add_log(&format!("❌ Failed to open browser: {}", e));
+                            } else {
+                                app.add_log(&format!("🔗 Opened: {}", url));
+                            }
+                        }
+                        Action::None => {}
+                    }
+                }
+            }
+        }
+
+        // Process any download progress updates
+        app.process_progress();
+
+        if app.should_quit {
+            break;
+        }
+    }
+
+    Ok(())
+}
