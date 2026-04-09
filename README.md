@@ -11,29 +11,7 @@
 
 ## 🖼️ Preview
 
-```
-╔══════════════════════════════════════════════════════════════╗
-║  [1] Instagram          🧅 ONION          [5] X/Twitter     ║
-║  instagram.com/...       DownOda          x.com/...         ║
-║  [2] Facebook                             [6] Snapchat      ║
-║  facebook.com/...                         snapchat.com/...  ║
-╠══════════════════════════════════════════════════════════════╣
-║  🧅 Tor Status: ● Connected (socks5h://127.0.0.1:9050)     ║
-╠══════════════════════════════════════════════════════════════╣
-║  📎 Paste .onion URL                                        ║
-║  http://example.onion/file.zip▉                             ║
-╠══════════════════════════════════════════════════════════════╣
-║  📥 Downloads                                               ║
-║  ⏳ file.zip                                                ║
-║    ████████████░░░░░░ 45%  2.5 MB/s  ETA 12s               ║
-╠══════════════════════════════════════════════════════════════╣
-║  📋 Log (scroll ↑↓ PgUp/PgDn)                              ║
-║  [22:28:39] 🧅 Welcome to OnionDownOda                     ║
-╠══════════════════════════════════════════════════════════════╣
-║  ⚠️  Developer is NOT responsible for unauthorized downloads ║
-║  [Enter] Download  [Space] Pause  [Tab] Focus  [Esc] Quit   ║
-╚══════════════════════════════════════════════════════════════╝
-```
+![OnionDownOda UI](assets/OnionDOwnoda.png)
 
 ---
 
@@ -48,7 +26,7 @@
 | 📊 **Live Progress** | Real-time progress bars with speed, ETA, and byte count |
 | 📋 **Activity Log** | Timestamped events with colored status indicators |
 | ⚙️ **Configurable** | CLI args + optional TOML config file |
-| 🔗 **Social Links** | Press `1-8` anywhere to open developer profiles in browser |
+| 🌳 **Developer Links** | Linktree visible in UI — copy directly from terminal |
 | 📱 **Responsive** | Adapts layout to wide, medium, and narrow terminal sizes |
 
 ---
@@ -154,20 +132,6 @@ oniondownoda --verbose
 | `Esc` | Quit |
 | `Ctrl+C` | Force quit |
 
-### Social Shortcuts *(press anywhere)*
-
-| Key | Platform | URL |
-|:---:|----------|-----|
-| `1` | 📷 Instagram | [instagram.com/amigo.d.cyber](https://www.instagram.com/amigo.d.cyber) |
-| `2` | 📘 Facebook | [facebook.com/amigo.d.cyber](https://www.facebook.com/amigo.d.cyber) |
-| `3` | 📺 YouTube | [youtube.com/@CyberMafiaX](https://www.youtube.com/@CyberMafiaX) |
-| `4` | 🎵 TikTok | [tiktok.com/@amigo.d.cyber](https://www.tiktok.com/@amigo.d.cyber) |
-| `5` | 🐦 X/Twitter | [x.com/MafiaCyberX](https://x.com/MafiaCyberX) |
-| `6` | 👻 Snapchat | [snapchat.com/add/amigo-cyber](https://www.snapchat.com/add/amigo-cyber) |
-| `7` | 📌 Pinterest | [pinterest.com/amigodcyber](https://www.pinterest.com/amigodcyber/) |
-| `8` | 🐙 GitHub | [github.com/amigoDcyber](https://github.com/amigoDcyber) |
-| `0` | 🌳 Linktree | [linktr.ee/Amigo.D.Cyber](https://linktr.ee/Amigo.D.Cyber) |
-
 ---
 
 ## ⚙️ Configuration
@@ -181,7 +145,7 @@ Config file location:
 proxy = "socks5h://127.0.0.1:9050"
 
 # Output directory for downloads
-output_dir = "./downloads"
+output_dir = "~/Downloads"
 
 # Enable verbose logging
 verbose = true
@@ -225,7 +189,7 @@ sudo systemctl restart tor
 |--------|---------|
 | `main.rs` | Entry point, terminal setup, async event loop |
 | `app.rs` | App state machine, input handling, download tracking |
-| `ui.rs` | TUI rendering — banner, panels, progress bars, socials |
+| `ui.rs` | TUI rendering — banner, panels, progress bars, credits |
 | `banner.rs` | ASCII art branding |
 | `downloader.rs` | Parallel HTTP download engine with chunk support |
 | `tor.rs` | SOCKS5 connectivity check and reqwest client builder |
@@ -241,12 +205,6 @@ sudo systemctl restart tor
 | Platform | Link |
 |----------|------|
 | 🐙 GitHub | [@amigoDcyber](https://github.com/amigoDcyber) |
-| 📷 Instagram | [@amigo.d.cyber](https://www.instagram.com/amigo.d.cyber) |
-| 📺 YouTube | [@CyberMafiaX](https://www.youtube.com/@CyberMafiaX) |
-| 🎵 TikTok | [@amigo.d.cyber](https://www.tiktok.com/@amigo.d.cyber) |
-| 🐦 X/Twitter | [@MafiaCyberX](https://x.com/MafiaCyberX) |
-| 👻 Snapchat | [amigo-cyber](https://www.snapchat.com/add/amigo-cyber) |
-| 📌 Pinterest | [amigodcyber](https://www.pinterest.com/amigodcyber/) |
 | 🌳 All Links | [linktr.ee/Amigo.D.Cyber](https://linktr.ee/Amigo.D.Cyber) |
 
 ---
