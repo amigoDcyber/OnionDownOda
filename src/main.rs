@@ -128,13 +128,6 @@ async fn run_app(
                         Action::Resume => {
                             app.resume_download();
                         }
-                        Action::OpenUrl(url) => {
-                            if let Err(e) = webbrowser::open(&url) {
-                                app.add_log(&format!("❌ Failed to open browser: {}", e));
-                            } else {
-                                app.add_log(&format!("🔗 Opened: {}", url));
-                            }
-                        }
                         Action::None => {}
                     }
                 }

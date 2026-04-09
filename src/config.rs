@@ -1,4 +1,5 @@
 use clap::Parser;
+use dirs;
 use serde::Deserialize;
 use std::path::PathBuf;
 
@@ -14,8 +15,8 @@ pub struct CliArgs {
     pub proxy: String,
 
     /// Output directory for downloaded files
-    #[arg(short, long, default_value = "./downloads")]
-    pub output_dir: PathBuf,
+    #[arg(short, long)]
+    pub output_dir: Option<PathBuf>,
 
     /// Enable verbose logging
     #[arg(short, long)]
@@ -44,7 +45,10 @@ impl Config {
 
         Config {
             proxy: file_config.proxy.unwrap_or(cli.proxy),
-            output_dir: file_config.output_dir.unwrap_or(cli.output_dir),
+            output_dir: file_config.output_dir
+                .or(cli.output_dir)
+                .or_else(|| dirs::download_dir())
+                .unwrap_or_else(|| PathBuf::from("~/Downloads")),
         }
     }
 }

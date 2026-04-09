@@ -24,16 +24,9 @@ const DIM_GRAY: Color = Color::Rgb(80, 80, 80);
 const DARK_BG: Color = Color::Rgb(0, 0, 0);
 const SURFACE: Color = Color::Rgb(10, 10, 10);
 
-// Social links data
+// Social links data - only Linktree
+#[allow(dead_code)]
 const SOCIALS: &[(&str, &str, &str)] = &[
-    ("[1]", "Instagram", "https://www.instagram.com/amigo.d.cyber"),
-    ("[2]", "Facebook", "https://www.facebook.com/amigo.d.cyber"),
-    ("[3]", "YouTube", "https://www.youtube.com/@CyberMafiaX"),
-    ("[4]", "TikTok", "https://www.tiktok.com/@amigo.d.cyber"),
-    ("[5]", "X/Twitter", "https://x.com/MafiaCyberX"),
-    ("[6]", "Snapchat", "https://www.snapchat.com/add/amigo-cyber"),
-    ("[7]", "Pinterest", "https://www.pinterest.com/amigodcyber/"),
-    ("[8]", "GitHub", "https://github.com/amigoDcyber"),
     ("[0]", "Linktree", "https://linktr.ee/Amigo.D.Cyber"),
 ];
 
@@ -95,34 +88,28 @@ enum LayoutMode {
     Narrow, // < 80 cols
 }
 
-// ── Wide Header: 3-column (socials | logo | socials) ─────────────
+// ── Wide Header: Logo centered with Linktree below ─────────────
 fn draw_header_wide(frame: &mut Frame, area: ratatui::layout::Rect) {
     let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(25),
-            Constraint::Percentage(50),
-            Constraint::Percentage(25),
-        ])
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])
         .split(area);
 
-    // Left socials (1-4)
-    draw_social_column(frame, chunks[0], 0..4);
     // Center logo
-    draw_logo_centered(frame, chunks[1]);
-    // Right socials (5-8 + Linktree)
-    draw_social_column(frame, chunks[2], 4..9);
+    draw_logo_centered(frame, chunks[0]);
+    // Linktree link below
+    draw_linktree_line(frame, chunks[1]);
 }
 
-// ── Medium Header: Logo centered, socials below ─────────────────
+// ── Medium Header: Logo centered, Linktree below ──────────────
 fn draw_header_medium(frame: &mut Frame, area: ratatui::layout::Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])
         .split(area);
 
     draw_logo_centered(frame, chunks[0]);
-    draw_socials_compact(frame, chunks[1]);
+    draw_linktree_line(frame, chunks[1]);
 }
 
 // ── Narrow Header: Plain text logo + warning ───────────────────
@@ -181,10 +168,12 @@ fn draw_logo_centered(frame: &mut Frame, area: ratatui::layout::Rect) {
 }
 
 // ── Social column for wide layout ──────────────────────────────
+#[allow(dead_code)]
 fn draw_social_column(frame: &mut Frame, area: ratatui::layout::Rect, range: std::ops::Range<usize>) {
     let mut lines = Vec::new();
     for i in range {
         if let Some((key, platform, url)) = SOCIALS.get(i) {
+            // Compact format: platform + URL on consecutive lines, no blank line
             lines.push(Line::from(vec![
                 Span::styled(format!("{} ", key), Style::default().fg(MAGENTA)),
                 Span::styled(platform.to_string(), Style::default().fg(CYAN)),
@@ -193,7 +182,6 @@ fn draw_social_column(frame: &mut Frame, area: ratatui::layout::Rect, range: std
                 Span::styled("    ".to_string(), Style::default()),
                 Span::styled(url.to_string(), Style::default().fg(GRAY)),
             ]));
-            lines.push(Line::from(""));
         }
     }
     frame.render_widget(
@@ -202,34 +190,16 @@ fn draw_social_column(frame: &mut Frame, area: ratatui::layout::Rect, range: std
     );
 }
 
-// ── Compact socials for medium layout ──────────────────────────
-fn draw_socials_compact(frame: &mut Frame, area: ratatui::layout::Rect) {
-    let mut lines = Vec::new();
-    let mut current_line = vec![Span::styled("  ", Style::default())];
+// ── Linktree line for header ─────────────────────────────────
+fn draw_linktree_line(frame: &mut Frame, area: ratatui::layout::Rect) {
+    let line = Paragraph::new(Line::from(vec![
+        Span::styled("🌳 All Links: ", Style::default().fg(CYAN)),
+        Span::styled("https://linktr.ee/Amigo.D.Cyber", Style::default().fg(GRAY)),
+    ]))
+    .alignment(Alignment::Center)
+    .style(Style::default().bg(DARK_BG));
 
-    for (i, (key, platform, _url)) in SOCIALS.iter().enumerate() {
-        current_line.push(Span::styled(
-            format!("{} ", key),
-            Style::default().fg(MAGENTA),
-        ));
-        current_line.push(Span::styled(
-            format!("{}  ", platform),
-            Style::default().fg(CYAN),
-        ));
-
-        // New line every 3 items
-        if (i + 1) % 3 == 0 || i == SOCIALS.len() - 1 {
-            lines.push(Line::from(current_line.clone()));
-            current_line = vec![Span::styled("  ", Style::default())];
-        }
-    }
-
-    frame.render_widget(
-        Paragraph::new(lines)
-            .alignment(Alignment::Center)
-            .style(Style::default().bg(DARK_BG)),
-        area,
-    );
+    frame.render_widget(line, area);
 }
 
 // ── Tor Status Bar ─────────────────────────────────────────────
@@ -470,7 +440,7 @@ fn draw_log(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 
 // ── Socials Panel (full URLs visible) ────────────────────────────
 #[allow(dead_code)]
-fn draw_socials_panel(frame: &mut Frame, area: ratatui::layout::Rect, mode: LayoutMode) {
+fn draw_socials_panel(frame: &mut Frame, area: ratatui::layout::Rect, _mode: LayoutMode) {
     let block = Block::default()
         .title(Span::styled(
             " 👤 Developer & Socials — Press keys to open in browser ",
@@ -492,47 +462,14 @@ fn draw_socials_panel(frame: &mut Frame, area: ratatui::layout::Rect, mode: Layo
             "@amigoDcyber",
             Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" — High-speed Tor downloader with Rust", Style::default().fg(GRAY)),
     ]));
     lines.push(Line::from(""));
 
-    match mode {
-        LayoutMode::Wide => {
-            // Two columns of social links: 4 left, 5 right
-            let left = &SOCIALS[0..4];   // [1-4] Instagram, Facebook, YouTube, TikTok
-            let right = &SOCIALS[4..9];  // [5-8] + [0] X, Snapchat, Pinterest, GitHub, Linktree
-            
-            // 5 rows to accommodate all 9 items
-            for i in 0..5 {
-                let left_str = if let Some((k, p, u)) = left.get(i) {
-                    format!("{} {} → {}", k, p, u)
-                } else {
-                    String::new()  // Empty for row 5 since left only has 4
-                };
-                let right_str = if let Some((k, p, u)) = right.get(i) {
-                    format!("{} {} → {}", k, p, u)
-                } else {
-                    String::new()
-                };
-                
-                lines.push(Line::from(vec![
-                    Span::styled(format!("  {}", left_str), Style::default().fg(WHITE)),
-                    Span::styled("    ", Style::default()),
-                    Span::styled(right_str, Style::default().fg(WHITE)),
-                ]));
-            }
-        }
-        _ => {
-            // Single column for medium/narrow
-            for (key, platform, url) in SOCIALS.iter() {
-                lines.push(Line::from(vec![
-                    Span::styled(format!("  {} ", key), Style::default().fg(MAGENTA)),
-                    Span::styled(format!("{} ", platform), Style::default().fg(CYAN)),
-                    Span::styled(format!("→ {}", url), Style::default().fg(WHITE)),
-                ]));
-            }
-        }
-    }
+    // Linktree line
+    lines.push(Line::from(vec![
+        Span::styled("  🌳 Linktree: ", Style::default().fg(CYAN)),
+        Span::styled("https://linktr.ee/Amigo.D.Cyber", Style::default().fg(GRAY)),
+    ]));
 
     frame.render_widget(
         Paragraph::new(lines).style(Style::default().bg(SURFACE)),
@@ -586,8 +523,6 @@ fn draw_disclaimer_and_help(frame: &mut Frame, app: &App, area: ratatui::layout:
             Span::styled(" Pause  ", Style::default().fg(WHITE)),
             Span::styled("[Tab]", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
             Span::styled(" Focus  ", Style::default().fg(WHITE)),
-            Span::styled("[0-8]", Style::default().fg(MAGENTA).add_modifier(Modifier::BOLD)),
-            Span::styled(" Socials  ", Style::default().fg(WHITE)),
             Span::styled("[↑↓]", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
             Span::styled(" Scroll  ", Style::default().fg(WHITE)),
             Span::styled("[Esc]", Style::default().fg(LOGO_PINK).add_modifier(Modifier::BOLD)),

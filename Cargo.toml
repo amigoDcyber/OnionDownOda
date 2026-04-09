@@ -24,7 +24,6 @@ toml = "0.8"
 thiserror = "2"
 dirs = "6"
 tempfile = "3"
-webbrowser = "1"
 
 [profile.release]
 strip = true

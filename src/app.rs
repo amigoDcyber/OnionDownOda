@@ -62,7 +62,6 @@ pub enum Action {
     StartDownload(String),
     Pause,
     Resume,
-    OpenUrl(String),
     Quit,
 }
 
@@ -118,20 +117,6 @@ impl App {
     pub fn handle_key(&mut self, key: KeyEvent) -> Action {
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             return Action::Quit;
-        }
-
-        // Global social media shortcuts (0-8)
-        match key.code {
-            KeyCode::Char('1') => return Action::OpenUrl("https://www.instagram.com/amigo.d.cyber".to_string()),
-            KeyCode::Char('2') => return Action::OpenUrl("https://www.facebook.com/amigo.d.cyber".to_string()),
-            KeyCode::Char('3') => return Action::OpenUrl("https://www.youtube.com/@CyberMafiaX".to_string()),
-            KeyCode::Char('4') => return Action::OpenUrl("https://www.tiktok.com/@amigo.d.cyber".to_string()),
-            KeyCode::Char('5') => return Action::OpenUrl("https://x.com/MafiaCyberX".to_string()),
-            KeyCode::Char('6') => return Action::OpenUrl("https://www.snapchat.com/add/amigo-cyber".to_string()),
-            KeyCode::Char('7') => return Action::OpenUrl("https://www.pinterest.com/amigodcyber/".to_string()),
-            KeyCode::Char('8') => return Action::OpenUrl("https://github.com/amigoDcyber".to_string()),
-            KeyCode::Char('0') => return Action::OpenUrl("https://linktr.ee/Amigo.D.Cyber".to_string()),
-            _ => {}
         }
 
         match self.focus {
