@@ -1,21 +1,55 @@
 # 🧅 OnionDownOda
 
-A beautiful, high-performance TUI application for downloading files from `.onion` URLs via the Tor network.
+> A beautiful, high-performance TUI for downloading files from `.onion` URLs over Tor — built in Rust from Kigali 🇷🇼
 
-Built with **Rust** — featuring parallel chunk downloading (up to 100 connections), pause/resume support, and a stunning cyberpunk interface.
+[![crates.io](https://img.shields.io/crates/v/oniondownoda.svg)](https://crates.io/crates/oniondownoda)
+[![AUR](https://img.shields.io/aur/version/oniondownoda)](https://aur.archlinux.org/packages/oniondownoda)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/amigoDcyber/OnionDownOda)](https://github.com/amigoDcyber/OnionDownOda)
+
+---
+
+## 🖼️ Preview
+
+```
+╔══════════════════════════════════════════════════════════════╗
+║  [1] Instagram          🧅 ONION          [5] X/Twitter     ║
+║  instagram.com/...       DownOda          x.com/...         ║
+║  [2] Facebook                             [6] Snapchat      ║
+║  facebook.com/...                         snapchat.com/...  ║
+╠══════════════════════════════════════════════════════════════╣
+║  🧅 Tor Status: ● Connected (socks5h://127.0.0.1:9050)     ║
+╠══════════════════════════════════════════════════════════════╣
+║  📎 Paste .onion URL                                        ║
+║  http://example.onion/file.zip▉                             ║
+╠══════════════════════════════════════════════════════════════╣
+║  📥 Downloads                                               ║
+║  ⏳ file.zip                                                ║
+║    ████████████░░░░░░ 45%  2.5 MB/s  ETA 12s               ║
+╠══════════════════════════════════════════════════════════════╣
+║  📋 Log (scroll ↑↓ PgUp/PgDn)                              ║
+║  [22:28:39] 🧅 Welcome to OnionDownOda                     ║
+╠══════════════════════════════════════════════════════════════╣
+║  ⚠️  Developer is NOT responsible for unauthorized downloads ║
+║  [Enter] Download  [Space] Pause  [Tab] Focus  [Esc] Quit   ║
+╚══════════════════════════════════════════════════════════════╝
+```
+
+---
 
 ## ✨ Features
 
 | Feature | Description |
 |---------|-------------|
-| 🎨 **Cyberpunk TUI** | Neon pink/green/purple aesthetic powered by `ratatui` |
-| 🧅 **Tor Native** | SOCKS5 proxy support for `.onion` URLs |
+| 🎨 **Cyberpunk TUI** | Neon magenta/cyan/green aesthetic powered by `ratatui` |
+| 🧅 **Tor Native** | SOCKS5 proxy support for `.onion` URLs via `reqwest` |
 | ⚡ **Parallel Downloads** | Up to 100 concurrent connections for maximum speed |
-| ⏸️ **Pause/Resume** | Press `Space` to pause and resume downloads |
-| 📊 **Live Progress** | Real-time progress bars with speed, ETA, and status |
-| 📋 **Activity Log** | Timestamped events with colored indicators |
+| ⏸️ **Pause/Resume** | Press `Space` to pause and resume any active download |
+| 📊 **Live Progress** | Real-time progress bars with speed, ETA, and byte count |
+| 📋 **Activity Log** | Timestamped events with colored status indicators |
 | ⚙️ **Configurable** | CLI args + optional TOML config file |
-| 🔗 **Social Links** | Quick access to developer social profiles |
+| 🔗 **Social Links** | Press `1-8` anywhere to open developer profiles in browser |
+| 📱 **Responsive** | Adapts layout to wide, medium, and narrow terminal sizes |
 
 ---
 
@@ -23,181 +57,160 @@ Built with **Rust** — featuring parallel chunk downloading (up to 100 connecti
 
 ### Prerequisites
 
-- **Rust** 1.70+ — [install via rustup](https://rustup.rs/)
-- **Tor** — must be running on your system
+- **Tor** — must be running on your system before launching the app
 
-#### Installing Tor
+#### Install & Start Tor
 
 ```bash
-# Arch Linux / Manjaro
+# Arch Linux / Garuda / Manjaro
 sudo pacman -S tor
-sudo systemctl start tor
-sudo systemctl enable tor
+sudo systemctl enable --now tor
 
-# Ubuntu / Debian / Linux Mint
+# Ubuntu / Debian
 sudo apt install tor
-sudo systemctl start tor
-sudo systemctl enable tor
+sudo systemctl enable --now tor
 
-# Fedora / RHEL
+# Fedora
 sudo dnf install tor
-sudo systemctl start tor
-sudo systemctl enable tor
+sudo systemctl enable --now tor
 
-# macOS (with Homebrew)
+# macOS
 brew install tor
 brew services start tor
-
-# Windows
-# Download Tor Browser or run Tor Expert Bundle
 ```
+
+---
+
+### Via crates.io *(Recommended)*
+
+```bash
+cargo install oniondownoda
+```
+
+> Requires Rust 1.70+ — install via [rustup.rs](https://rustup.rs/)
+
+---
+
+### Via AUR *(Arch / Garuda / Manjaro)*
+
+```bash
+yay -S oniondownoda
+# or
+paru -S oniondownoda
+```
+
+---
+
+### Via GitHub Releases *(No Rust required)*
+
+Download the pre-built binary for your platform from the [Releases page](https://github.com/amigoDcyber/OnionDownOda/releases/latest):
+
+```bash
+# After downloading, make it executable
+chmod +x oniondownoda
+./oniondownoda
+```
+
+---
 
 ### Build from Source
 
 ```bash
-# Clone the repository
 git clone https://github.com/amigoDcyber/OnionDownOda.git
 cd OnionDownOda
-
-# Build optimized release binary
 cargo build --release
-
-# The binary will be at:
 ./target/release/oniondownoda
-
-# Optional: Install to system
-sudo cp ./target/release/oniondownoda /usr/local/bin/
 ```
 
 ---
 
 ## 🚀 Usage
 
-### Quick Start
-
 ```bash
 # Run with defaults (Tor at 127.0.0.1:9050)
-./target/release/oniondownoda
+oniondownoda
 
-# Custom Tor proxy (e.g., Tor Browser)
-./target/release/oniondownoda --proxy socks5h://127.0.0.1:9150
+# Custom Tor proxy (e.g., Tor Browser on port 9150)
+oniondownoda --proxy socks5h://127.0.0.1:9150
 
 # Custom output directory
-./target/release/oniondownoda --output-dir ~/Downloads/onion
+oniondownoda --output-dir ~/Downloads/onion
 
-# With verbose logging
-./target/release/oniondownoda --verbose
+# Verbose logging
+oniondownoda --verbose
 ```
-
-### Keyboard Shortcuts
-
-| Key | Action |
-|:---:|:---|
-| `Enter` | Start download from URL input |
-| `Tab` | Switch focus (Input ↔ Downloads) |
-| `Space` | **Pause/Resume** download (in Downloads focus) |
-| `↑` / `↓` | Scroll downloads list |
-| `Esc` | Quit application |
-| `Ctrl+C` | Force quit |
-
-#### Social Media Shortcuts (Global)
-
-Press these keys **anywhere** to open the developer's profiles:
-
-| Key | Platform | URL |
-|:---:|:---|:---|
-| `1` | 📷 Instagram | instagram.com/amigo.d.cyber |
-| `2` | 📘 Facebook | facebook.com/amigo.d.cyber |
-| `3` | 📺 YouTube | youtube.com/@CyberMafiaX |
-| `4` | 🎵 TikTok | tiktok.com/@amigo.d.cyber |
-| `5` | 🐦 X (Twitter) | x.com/MafiaCyberX |
-| `6` | 👻 Snapchat | snapchat.com/add/amigo-cyber |
-| `7` | 📌 Pinterest | pinterest.com/amigodcyber |
-| `8` | 🐙 GitHub | github.com/amigoDcyber |
-| `0` | 🌳 Linktree | linktr.ee/Amigo.D.Cyber |
 
 ---
 
-## 🖥️ Interface Guide
+## ⌨️ Keyboard Shortcuts
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  🧅 ONIONDOWNODA  ─  High-Speed Tor Downloader         │  ← Banner
-├─────────────────────────────────────────────────────────┤
-│  🧅 Tor Status: ✅ Connected (127.0.0.1:9050)        │  ← Tor Status
-├─────────────────────────────────────────────────────────┤
-│  🔗 URL Input                                            │  ← Input Box
-│  http://example.onion/file.zip ▉                       │
-├─────────────────────────────────────────────────────────┤
-│  📥 Downloads                                          │  ← Downloads Panel
-│  ⏳ file.zip                                          │
-│    ████████████░░░░░░░ 45%  2.5 MB/s  ETA 12s         │
-├─────────────────────────────────────────────────────────┤
-│  📋 Log                                               │  ← Activity Log
-│  [12:34:56] 🧅 Welcome to OnionDownOda               │
-│  [12:35:01] 📥 Starting: file.zip (10 MB)            │
-├─────────────────────────────────────────────────────────┤
-│  👤 Developer & Socials                                │  ← Credits Panel
-│  GitHub: @amigoDcyber  |  Press: [1-8] for socials   │
-│  [1]📷 IG  [2]📘 FB  [3]📺 YT  [4]🎵 TT  [5]🐦 X   │
-├─────────────────────────────────────────────────────────┤
-│  [Enter] Download  [Space] Pause  [Tab] Focus  [Esc] Quit│  ← Help Bar
-└─────────────────────────────────────────────────────────┘
-```
+| Key | Action |
+|:---:|--------|
+| `Enter` | Start download from URL input |
+| `Tab` | Switch focus between Input and Downloads |
+| `Space` | Pause / Resume selected download |
+| `↑` / `↓` | Scroll downloads or log |
+| `PgUp` / `PgDn` | Scroll log faster |
+| `Esc` | Quit |
+| `Ctrl+C` | Force quit |
+
+### Social Shortcuts *(press anywhere)*
+
+| Key | Platform | URL |
+|:---:|----------|-----|
+| `1` | 📷 Instagram | [instagram.com/amigo.d.cyber](https://www.instagram.com/amigo.d.cyber) |
+| `2` | 📘 Facebook | [facebook.com/amigo.d.cyber](https://www.facebook.com/amigo.d.cyber) |
+| `3` | 📺 YouTube | [youtube.com/@CyberMafiaX](https://www.youtube.com/@CyberMafiaX) |
+| `4` | 🎵 TikTok | [tiktok.com/@amigo.d.cyber](https://www.tiktok.com/@amigo.d.cyber) |
+| `5` | 🐦 X/Twitter | [x.com/MafiaCyberX](https://x.com/MafiaCyberX) |
+| `6` | 👻 Snapchat | [snapchat.com/add/amigo-cyber](https://www.snapchat.com/add/amigo-cyber) |
+| `7` | 📌 Pinterest | [pinterest.com/amigodcyber](https://www.pinterest.com/amigodcyber/) |
+| `8` | 🐙 GitHub | [github.com/amigoDcyber](https://github.com/amigoDcyber) |
+| `0` | 🌳 Linktree | [linktr.ee/Amigo.D.Cyber](https://linktr.ee/Amigo.D.Cyber) |
 
 ---
 
 ## ⚙️ Configuration
 
-OnionDownOda looks for a config file at:
-- Linux/macOS: `~/.config/oniondownoda/config.toml`
-- Windows: `%APPDATA%\oniondownoda\config.toml`
-
-### Example `config.toml`
+Config file location:
+- **Linux/macOS:** `~/.config/oniondownoda/config.toml`
+- **Windows:** `%APPDATA%\oniondownoda\config.toml`
 
 ```toml
-# Tor SOCKS5 proxy address
+# Tor SOCKS5 proxy
 proxy = "socks5h://127.0.0.1:9050"
 
-# Where to save downloaded files
+# Output directory for downloads
 output_dir = "./downloads"
 
 # Enable verbose logging
 verbose = true
 ```
 
-**Priority order:** CLI args > Config file > Defaults
+**Priority:** CLI args → Config file → Defaults
 
 ---
 
-## 🔧 Advanced Usage
+## 🔧 Download States
 
-### Download States
+| State | Icon | Description |
+|-------|:----:|-------------|
+| In Progress | ⏳ | Actively downloading with live progress bar |
+| Paused | ⏸️ | Paused — press `Space` to resume |
+| Completed | ✅ | Finished successfully |
+| Failed | ❌ | Error occurred — check log for details |
 
-| State | Indicator | Description |
-|-------|:---------:|:------------|
-| In Progress | ⏳ | Active downloading with progress bar |
-| Paused | ⏸️ | Download paused (Space to resume) |
-| Completed | ✅ | Download finished successfully |
-| Failed | ❌ | Error occurred during download |
+---
 
-### Parallel Downloading
+## 🛠️ Tor Troubleshooting
 
-The app automatically uses parallel chunk downloading when:
-1. Server supports HTTP Range requests
-2. File size is ≥ 1 MB
-
-Up to **100 concurrent connections** are used for maximum throughput over Tor.
-
-### Tor Connection Troubleshooting
-
-If you see `⚠ Tor proxy not responding`:
+If you see `● Disconnected` in the status bar:
 
 ```bash
 # Check if Tor is running
 sudo systemctl status tor
 
-# Test proxy connectivity
+# Test connectivity
 curl --socks5-hostname 127.0.0.1:9050 https://check.torproject.org/api/ip
 
 # Restart Tor
@@ -206,34 +219,13 @@ sudo systemctl restart tor
 
 ---
 
-## 👤 Developer
-
-**Amigo D. Cyber** — Cybersecurity enthusiast & Rust developer
-
-- 🐙 GitHub: [@amigoDcyber](https://github.com/amigoDcyber)
-- 🌳 All Links: [linktr.ee/Amigo.D.Cyber](https://linktr.ee/Amigo.D.Cyber)
-
-### Social Media
-
-| Platform | Handle | Link |
-|----------|--------|------|
-| Instagram | @amigo.d.cyber | [instagram.com/amigo.d.cyber](https://www.instagram.com/amigo.d.cyber) |
-| Facebook | @amigo.d.cyber | [facebook.com/amigo.d.cyber](https://www.facebook.com/amigo.d.cyber) |
-| YouTube | @CyberMafiaX | [youtube.com/@CyberMafiaX](https://www.youtube.com/@CyberMafiaX) |
-| TikTok | @amigo.d.cyber | [tiktok.com/@amigo.d.cyber](https://www.tiktok.com/@amigo.d.cyber) |
-| X/Twitter | @MafiaCyberX | [x.com/MafiaCyberX](https://x.com/MafiaCyberX) |
-| Snapchat | amigo-cyber | [snapchat.com/add/amigo-cyber](https://www.snapchat.com/add/amigo-cyber) |
-| Pinterest | amigodcyber | [pinterest.com/amigodcyber](https://www.pinterest.com/amigodcyber/) |
-
----
-
 ## 🏗️ Architecture
 
 | Module | Purpose |
 |--------|---------|
 | `main.rs` | Entry point, terminal setup, async event loop |
-| `app.rs` | App state machine, input handling, download tracking, pause/resume logic |
-| `ui.rs` | TUI rendering — banner, panels, progress bars, credits panel |
+| `app.rs` | App state machine, input handling, download tracking |
+| `ui.rs` | TUI rendering — banner, panels, progress bars, socials |
 | `banner.rs` | ASCII art branding |
 | `downloader.rs` | Parallel HTTP download engine with chunk support |
 | `tor.rs` | SOCKS5 connectivity check and reqwest client builder |
@@ -242,21 +234,35 @@ sudo systemctl restart tor
 
 ---
 
-## � License
+## 👤 Developer
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+**Amigo D. Cyber** — Cybersecurity enthusiast & Rust developer from Kigali, Rwanda 🇷🇼
+
+| Platform | Link |
+|----------|------|
+| 🐙 GitHub | [@amigoDcyber](https://github.com/amigoDcyber) |
+| 📷 Instagram | [@amigo.d.cyber](https://www.instagram.com/amigo.d.cyber) |
+| 📺 YouTube | [@CyberMafiaX](https://www.youtube.com/@CyberMafiaX) |
+| 🎵 TikTok | [@amigo.d.cyber](https://www.tiktok.com/@amigo.d.cyber) |
+| 🐦 X/Twitter | [@MafiaCyberX](https://x.com/MafiaCyberX) |
+| 👻 Snapchat | [amigo-cyber](https://www.snapchat.com/add/amigo-cyber) |
+| 📌 Pinterest | [amigodcyber](https://www.pinterest.com/amigodcyber/) |
+| 🌳 All Links | [linktr.ee/Amigo.D.Cyber](https://linktr.ee/Amigo.D.Cyber) |
+
+---
+
+## 📄 License
+
+MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Feel free to:
-- Open an issue for bugs or feature requests
-- Submit a pull request
-- Fork and customize for your needs
+PRs, issues, and forks are welcome. If you find a bug or want a feature, open an issue on GitHub.
 
 ---
 
 ## ⚠️ Disclaimer
 
-This tool is for educational and research purposes. Users are responsible for complying with local laws and service terms when downloading content via Tor. The developer assumes no liability for misuse.
+This tool is for **educational and research purposes only**. Users are solely responsible for complying with local laws and the terms of service of any site accessed via Tor. **The developer assumes no liability for any files downloaded without proper authorization.**
