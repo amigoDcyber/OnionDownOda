@@ -2,8 +2,15 @@
 name = "oniondownoda"
 version = "0.1.0"
 edition = "2021"
-description = "🧅 OnionDownOda — A beautiful TUI for downloading files from .onion URLs"
+description = "🧅 OnionDownOda — A beautiful TUI for downloading files from .onion URLs over Tor"
 license = "MIT"
+authors = ["amigoDcyber <lionmafia810@gmail.com>"]
+repository = "https://github.com/amigoDcyber/OnionDownOda"
+homepage = "https://github.com/amigoDcyber/OnionDownOda"
+readme = "README.md"
+keywords = ["tor", "onion", "tui", "downloader", "ratatui"]
+categories = ["command-line-utilities", "network-programming"]
+exclude = [".git", "downloads", "target", "*.svg"]
 
 [dependencies]
 ratatui = "0.29"
