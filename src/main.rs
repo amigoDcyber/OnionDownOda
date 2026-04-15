@@ -7,7 +7,7 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 use std::panic;
 use std::time::Duration;
-use tokio::sync::mpsc;
+// Removed unused mpsc
 
 mod app;
 mod banner;
@@ -17,7 +17,7 @@ mod error;
 mod tor;
 mod ui;
 
-use app::{Action, App};
+use app::{Action, App, NetworkMode};
 use config::Config;
 
 fn setup_panic_hook() {
@@ -25,11 +25,7 @@ fn setup_panic_hook() {
     panic::set_hook(Box::new(move |info| {
         // Restore terminal before printing panic message
         let _ = disable_raw_mode();
-        let _ = execute!(
-            io::stdout(),
-            LeaveAlternateScreen,
-            DisableMouseCapture
-        );
+        let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
         original_hook(info);
     }));
 }
@@ -37,7 +33,7 @@ fn setup_panic_hook() {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_panic_hook();
-    
+
     let config = Config::load();
 
     // ── Setup terminal ─────────────────────────────
@@ -91,22 +87,37 @@ async fn run_app(
                 if key.kind == KeyEventKind::Press {
                     let action = app.handle_key(key);
                     match action {
-                        Action::StartDownload(url) => {
-                            let (tx, rx) = mpsc::unbounded_channel();
-                            app.start_download(&url, rx);
+                        Action::ShowDialog(_url) => {
+                            app.add_log("Configure download settings and press Enter to start");
+                        }
+                        Action::StartDownload {
+                            url,
+                            network,
+                            chunks,
+                        } => {
+                            let tx = app.progress_tx.clone();
+                            let dl_id = app.start_download(&url, network.clone(), chunks);
                             app.add_log(&format!("🔗 Connecting to {}...", &url));
 
-                            let client = match tor::build_client(&app.proxy_addr) {
+                            let client_res = match network {
+                                NetworkMode::Tor => tor::build_client(&app.proxy_addr),
+                                NetworkMode::Normal => tor::build_normal_client(),
+                            };
+
+                            let client = match client_res {
                                 Ok(c) => c,
                                 Err(e) => {
                                     app.add_log(&format!("❌ Client error: {}", e));
+                                    app.downloads[dl_id].status =
+                                        app::DownloadStatus::Failed(e.to_string());
                                     continue;
                                 }
                             };
 
                             let output_dir = app.output_dir.clone();
                             let url_clone = url.clone();
-                            let paused_flag = app.paused.clone();
+                            let paused_flag = app.downloads[dl_id].paused.clone();
+
                             tokio::spawn(async move {
                                 let _ = downloader::download_file(
                                     &client,
@@ -114,6 +125,8 @@ async fn run_app(
                                     &output_dir,
                                     tx,
                                     paused_flag,
+                                    dl_id,
+                                    chunks,
                                 )
                                 .await;
                             });
@@ -122,11 +135,11 @@ async fn run_app(
                             app.should_quit = true;
                             break;
                         }
-                        Action::Pause => {
-                            app.pause_download();
+                        Action::Pause(id) => {
+                            app.pause_download(id);
                         }
-                        Action::Resume => {
-                            app.resume_download();
+                        Action::Resume(id) => {
+                            app.resume_download(id);
                         }
                         Action::None => {}
                     }

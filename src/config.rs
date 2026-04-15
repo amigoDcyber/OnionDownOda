@@ -1,5 +1,4 @@
 use clap::Parser;
-use dirs;
 use serde::Deserialize;
 use std::path::PathBuf;
 
@@ -11,8 +10,8 @@ use std::path::PathBuf;
 )]
 pub struct CliArgs {
     /// SOCKS5 proxy address for Tor
-    #[arg(short, long, default_value = "socks5h://127.0.0.1:9050")]
-    pub proxy: String,
+    #[arg(short, long)]
+    pub proxy: Option<String>,
 
     /// Output directory for downloaded files
     #[arg(short, long)]
@@ -44,10 +43,14 @@ impl Config {
             .unwrap_or_default();
 
         Config {
-            proxy: file_config.proxy.unwrap_or(cli.proxy),
-            output_dir: file_config.output_dir
-                .or(cli.output_dir)
-                .or_else(|| dirs::download_dir())
+            proxy: cli
+                .proxy
+                .or(file_config.proxy)
+                .unwrap_or_else(|| "socks5h://127.0.0.1:9050".to_string()),
+            output_dir: cli
+                .output_dir
+                .or(file_config.output_dir)
+                .or_else(dirs::download_dir)
                 .unwrap_or_else(|| PathBuf::from("~/Downloads")),
         }
     }

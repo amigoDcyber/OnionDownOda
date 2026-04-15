@@ -1,17 +1,13 @@
-use crate::app::{App, DownloadStatus, Focus, format_bytes};
+use crate::app::{format_bytes, App, AppMode, DialogFocus, DownloadStatus, Focus, NetworkMode};
 use crate::banner::BANNER;
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
 
-// ── Color Palette (as specified) ──────────────────────────────
-// Background: Black, Logo: Magenta/Pink, Borders: Magenta
-// Labels: Magenta, Status: Green, Input/Social labels: Cyan
-// URLs/Text: White/Gray, Warning: Yellow
 const LOGO_MAGENTA: Color = Color::Rgb(255, 0, 255);
 const LOGO_PINK: Color = Color::Rgb(255, 110, 199);
 const MAGENTA: Color = Color::Rgb(191, 64, 255);
@@ -24,28 +20,19 @@ const DIM_GRAY: Color = Color::Rgb(80, 80, 80);
 const DARK_BG: Color = Color::Rgb(0, 0, 0);
 const SURFACE: Color = Color::Rgb(10, 10, 10);
 
-// Social links data - only Linktree
-#[allow(dead_code)]
-const SOCIALS: &[(&str, &str, &str)] = &[
-    ("[0]", "Linktree", "https://linktr.ee/Amigo.D.Cyber"),
-];
-
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
-// ── Main draw entry point ──────────────────────────────────────
 pub fn draw(frame: &mut Frame, app: &App) {
     let size = frame.area();
     let width = size.width;
 
-    // Overall dark background
     frame.render_widget(
         Block::default().style(Style::default().bg(Color::Rgb(0, 0, 0))),
         size,
     );
 
-    // Determine layout mode based on terminal width
     let layout_mode = if width >= 120 {
         LayoutMode::Wide
     } else if width >= 80 {
@@ -54,20 +41,17 @@ pub fn draw(frame: &mut Frame, app: &App) {
         LayoutMode::Narrow
     };
 
-    // Percentage-based responsive layout (Developer & Socials panel removed)
     let main_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(28), // Header (banner + socials + credit) - increased
-            Constraint::Percentage(7),  // Tor status
-            Constraint::Percentage(10), // Input area
-            Constraint::Percentage(32), // Downloads
-            Constraint::Percentage(12), // Log (smaller)
-            // Socials panel removed - links now in header
+            Constraint::Percentage(28),
+            Constraint::Percentage(7),
+            Constraint::Percentage(10),
+            Constraint::Percentage(32),
+            Constraint::Percentage(12),
         ])
         .split(size);
 
-    // Draw sections
     match layout_mode {
         LayoutMode::Wide => draw_header_wide(frame, main_layout[0]),
         LayoutMode::Medium => draw_header_medium(frame, main_layout[0]),
@@ -79,29 +63,31 @@ pub fn draw(frame: &mut Frame, app: &App) {
     draw_downloads(frame, app, main_layout[3]);
     draw_log(frame, app, main_layout[4]);
     draw_disclaimer_and_help(frame, app, size);
+
+    if app.mode == AppMode::Dialog {
+        draw_dialog(frame, app, size);
+    } else if app.mode == AppMode::Help {
+        draw_help(frame, size);
+    }
 }
 
 #[derive(Clone, Copy)]
 enum LayoutMode {
-    Wide,   // >= 120 cols
-    Medium, // 80-119 cols
-    Narrow, // < 80 cols
+    Wide,
+    Medium,
+    Narrow,
 }
 
-// ── Wide Header: Logo centered with Linktree below ─────────────
 fn draw_header_wide(frame: &mut Frame, area: ratatui::layout::Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])
         .split(area);
 
-    // Center logo
     draw_logo_centered(frame, chunks[0]);
-    // Linktree link below
     draw_linktree_line(frame, chunks[1]);
 }
 
-// ── Medium Header: Logo centered, Linktree below ──────────────
 fn draw_header_medium(frame: &mut Frame, area: ratatui::layout::Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -112,7 +98,6 @@ fn draw_header_medium(frame: &mut Frame, area: ratatui::layout::Rect) {
     draw_linktree_line(frame, chunks[1]);
 }
 
-// ── Narrow Header: Plain text logo + warning ───────────────────
 fn draw_header_narrow(frame: &mut Frame, area: ratatui::layout::Rect) {
     let text = Paragraph::new(vec![
         Line::from(Span::styled(
@@ -123,7 +108,7 @@ fn draw_header_narrow(frame: &mut Frame, area: ratatui::layout::Rect) {
                 .add_modifier(Modifier::UNDERLINED),
         )),
         Line::from(Span::styled(
-            "⚠️  Please resize terminal (min 80 cols) for full UI",
+            "⚠️  Please resize terminal (min 80 cols)",
             Style::default().fg(YELLOW),
         )),
     ])
@@ -132,12 +117,10 @@ fn draw_header_narrow(frame: &mut Frame, area: ratatui::layout::Rect) {
     frame.render_widget(text, area);
 }
 
-// ── Logo with DownOda subtitle ─────────────────────────────────
 fn draw_logo_centered(frame: &mut Frame, area: ratatui::layout::Rect) {
     let mut lines = Vec::new();
     let max_i = (BANNER.len() as f32 - 1.0).max(1.0);
 
-    // Full gradient banner - always show the ASCII art
     for (i, line_str) in BANNER.iter().enumerate() {
         let t = i as f32 / max_i;
         let r = lerp(255.0, 191.0, t) as u8;
@@ -147,13 +130,10 @@ fn draw_logo_centered(frame: &mut Frame, area: ratatui::layout::Rect) {
 
         lines.push(Line::from(Span::styled(
             *line_str,
-            Style::default()
-                .fg(color)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
         )));
     }
 
-    // Add credit line below the banner
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "made by Amigo.D.Cyber",
@@ -167,30 +147,6 @@ fn draw_logo_centered(frame: &mut Frame, area: ratatui::layout::Rect) {
     frame.render_widget(banner, area);
 }
 
-// ── Social column for wide layout ──────────────────────────────
-#[allow(dead_code)]
-fn draw_social_column(frame: &mut Frame, area: ratatui::layout::Rect, range: std::ops::Range<usize>) {
-    let mut lines = Vec::new();
-    for i in range {
-        if let Some((key, platform, url)) = SOCIALS.get(i) {
-            // Compact format: platform + URL on consecutive lines, no blank line
-            lines.push(Line::from(vec![
-                Span::styled(format!("{} ", key), Style::default().fg(MAGENTA)),
-                Span::styled(platform.to_string(), Style::default().fg(CYAN)),
-            ]));
-            lines.push(Line::from(vec![
-                Span::styled("    ".to_string(), Style::default()),
-                Span::styled(url.to_string(), Style::default().fg(GRAY)),
-            ]));
-        }
-    }
-    frame.render_widget(
-        Paragraph::new(lines).style(Style::default().bg(Color::Rgb(0, 0, 0))),
-        area,
-    );
-}
-
-// ── Linktree line for header ─────────────────────────────────
 fn draw_linktree_line(frame: &mut Frame, area: ratatui::layout::Rect) {
     let line = Paragraph::new(Line::from(vec![
         Span::styled("🌳 All Links: ", Style::default().fg(CYAN)),
@@ -202,12 +158,15 @@ fn draw_linktree_line(frame: &mut Frame, area: ratatui::layout::Rect) {
     frame.render_widget(line, area);
 }
 
-// ── Tor Status Bar ─────────────────────────────────────────────
 fn draw_tor_status(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let (icon, text, color) = if app.tor_connected {
         ("●", format!(" Connected ({})", app.proxy_addr), GREEN)
     } else {
-        ("●", " Disconnected — start tor service".to_string(), Color::Red)
+        (
+            "●",
+            " Disconnected — start tor service".to_string(),
+            Color::Red,
+        )
     };
 
     let line = Line::from(vec![
@@ -227,9 +186,8 @@ fn draw_tor_status(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     frame.render_widget(Paragraph::new(line).block(block), area);
 }
 
-// ── URL Input Field ────────────────────────────────────────────
 fn draw_input(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let focused = app.focus == Focus::Input;
+    let focused = app.focus == Focus::Input && app.mode != AppMode::Dialog;
     let border_color = if focused { CYAN } else { DIM_GRAY };
     let title_style = if focused {
         Style::default().fg(CYAN).add_modifier(Modifier::BOLD)
@@ -238,14 +196,14 @@ fn draw_input(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     };
 
     let block = Block::default()
-        .title(Span::styled(" 📎 Paste .onion URL ", title_style))
+        .title(Span::styled(" 📎 Paste Download URL ", title_style))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color))
         .style(Style::default().bg(SURFACE));
 
     let display_text = if app.input.is_empty() && !focused {
         Line::from(Span::styled(
-            "  Enter a .onion URL and press Enter to download...",
+            "  Enter a URL and press Enter to configure download...",
             Style::default().fg(DIM_GRAY).add_modifier(Modifier::ITALIC),
         ))
     } else {
@@ -256,11 +214,12 @@ fn draw_input(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     };
 
     frame.render_widget(
-        Paragraph::new(display_text).block(block).wrap(Wrap { trim: false }),
+        Paragraph::new(display_text)
+            .block(block)
+            .wrap(Wrap { trim: false }),
         area,
     );
 
-    // Cursor position when focused
     if focused {
         let x = area.x + app.cursor_position as u16 + 2;
         let y = area.y + 1;
@@ -268,15 +227,18 @@ fn draw_input(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     }
 }
 
-// ── Downloads Panel ────────────────────────────────────────────
 fn draw_downloads(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let focused = app.focus == Focus::Downloads && app.mode != AppMode::Dialog;
+    let title_style = if focused {
+        Style::default().fg(CYAN).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(MAGENTA).add_modifier(Modifier::BOLD)
+    };
+
     let block = Block::default()
-        .title(Span::styled(
-            " 📥 Downloads ",
-            Style::default().fg(MAGENTA).add_modifier(Modifier::BOLD),
-        ))
+        .title(Span::styled(" 📥 Downloads ", title_style))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(MAGENTA))
+        .border_style(Style::default().fg(if focused { CYAN } else { MAGENTA }))
         .style(Style::default().bg(SURFACE));
 
     if app.downloads.is_empty() {
@@ -294,7 +256,15 @@ fn draw_downloads(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 
     let mut lines = Vec::new();
 
-    for dl in &app.downloads {
+    for (i, dl) in app.downloads.iter().enumerate() {
+        let is_selected = app.selected_download == i;
+        let prefix = if is_selected { "> " } else { "  " };
+        let base_style = if is_selected {
+            Style::default().add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+
         let icon = match &dl.status {
             DownloadStatus::InProgress => "⏳",
             DownloadStatus::Paused => "⏸️",
@@ -302,20 +272,27 @@ fn draw_downloads(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             DownloadStatus::Failed(_) => "❌",
         };
 
-        // Filename row
         lines.push(Line::from(vec![
-            Span::styled(format!("  {} ", icon), Style::default().fg(WHITE)),
+            Span::styled(format!("{}{} ", prefix, icon), Style::default().fg(WHITE)),
+            Span::styled(&dl.filename, base_style.fg(WHITE)),
             Span::styled(
-                &dl.filename,
-                Style::default().fg(WHITE).add_modifier(Modifier::BOLD),
+                format!(
+                    "  [{} | {} chunks]",
+                    if dl.network == NetworkMode::Tor {
+                        "TOR"
+                    } else {
+                        "NORMAL"
+                    },
+                    dl.chunks
+                ),
+                Style::default().fg(DIM_GRAY).add_modifier(Modifier::ITALIC),
             ),
         ]));
 
-        // Progress / status row
         match &dl.status {
             DownloadStatus::InProgress | DownloadStatus::Paused => {
                 let is_paused = dl.status == DownloadStatus::Paused;
-                let speed = if is_paused { 0.0 } else { dl.speed_bps() };
+                let speed = if is_paused { 0.0 } else { dl.speed_bps };
                 let speed_str = format!("{}/s", format_bytes(speed as u64));
 
                 if let Some(total) = dl.total_bytes {
@@ -334,7 +311,7 @@ fn draw_downloads(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     let bar_color = if is_paused { Color::Red } else { GREEN };
 
                     lines.push(Line::from(vec![
-                        Span::styled("  ", Style::default()),
+                        Span::styled("   ", Style::default()),
                         Span::styled("█".repeat(filled), Style::default().fg(bar_color)),
                         Span::styled("░".repeat(empty), Style::default().fg(DIM_GRAY)),
                         Span::styled(
@@ -346,7 +323,7 @@ fn draw_downloads(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                     if is_paused {
                         lines.push(Line::from(vec![
                             Span::styled(
-                                "  ⏸️ Paused ".to_string(),
+                                "   ⏸️ Paused ".to_string(),
                                 Style::default().fg(Color::Red),
                             ),
                             Span::styled(
@@ -356,10 +333,11 @@ fn draw_downloads(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
                         ]));
                     } else {
                         let spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-                        let spin_idx = (dl.started_at.elapsed().as_millis() / 100) as usize % spinner.len();
+                        let spin_idx =
+                            (dl.started_at.elapsed().as_millis() / 100) as usize % spinner.len();
                         lines.push(Line::from(vec![
                             Span::styled(
-                                format!("  {} Downloading ", spinner[spin_idx]),
+                                format!("   {} Downloading ", spinner[spin_idx]),
                                 Style::default().fg(GREEN),
                             ),
                             Span::styled(
@@ -372,13 +350,13 @@ fn draw_downloads(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             }
             DownloadStatus::Completed => {
                 lines.push(Line::from(Span::styled(
-                    format!("  ✓ Done ({})", format_bytes(dl.downloaded_bytes)),
+                    format!("   ✓ Done ({})", format_bytes(dl.downloaded_bytes)),
                     Style::default().fg(GREEN),
                 )));
             }
             DownloadStatus::Failed(err) => {
                 lines.push(Line::from(Span::styled(
-                    format!("  ✗ {}", err),
+                    format!("   ✗ {}", err),
                     Style::default().fg(Color::Red),
                 )));
             }
@@ -394,7 +372,6 @@ fn draw_downloads(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     );
 }
 
-// ── Log Panel (shrunk to 3-4 lines with scrollback) ────────────
 fn draw_log(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let block = Block::default()
         .title(Span::styled(
@@ -408,11 +385,10 @@ fn draw_log(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let max_visible = 4;
     let total_logs = app.log_messages.len();
     let scroll = app.log_scroll as usize;
-    
-    // Calculate visible range
+
     let start = scroll.min(total_logs.saturating_sub(max_visible));
     let end = (start + max_visible).min(total_logs);
-    
+
     let log_lines: Vec<Line> = app
         .log_messages
         .iter()
@@ -438,60 +414,15 @@ fn draw_log(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     frame.render_widget(Paragraph::new(log_lines).block(block), area);
 }
 
-// ── Socials Panel (full URLs visible) ────────────────────────────
-#[allow(dead_code)]
-fn draw_socials_panel(frame: &mut Frame, area: ratatui::layout::Rect, _mode: LayoutMode) {
-    let block = Block::default()
-        .title(Span::styled(
-            " 👤 Developer & Socials — Press keys to open in browser ",
-            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
-        ))
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(MAGENTA))
-        .style(Style::default().bg(SURFACE));
-
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    let mut lines = Vec::new();
-
-    // GitHub credit line
-    lines.push(Line::from(vec![
-        Span::styled("  GitHub: ", Style::default().fg(CYAN)),
-        Span::styled(
-            "@amigoDcyber",
-            Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
-        ),
-    ]));
-    lines.push(Line::from(""));
-
-    // Linktree line
-    lines.push(Line::from(vec![
-        Span::styled("  🌳 Linktree: ", Style::default().fg(CYAN)),
-        Span::styled("https://linktr.ee/Amigo.D.Cyber", Style::default().fg(GRAY)),
-    ]));
-
-    frame.render_widget(
-        Paragraph::new(lines).style(Style::default().bg(SURFACE)),
-        inner,
-    );
-}
-
-// ── Disclaimer Banner + Help Bar ────────────────────────────────
 fn draw_disclaimer_and_help(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    // Use the bottom area of the screen
     let bottom = Layout::default()
         .direction(Direction::Vertical)
         .margin(0)
-        .constraints([
-            Constraint::Min(1),  // Push to bottom
-            Constraint::Length(2), // Disclaimer + Help
-        ])
+        .constraints([Constraint::Min(1), Constraint::Length(2)])
         .split(area);
 
     let footer_area = bottom[1];
 
-    // Disclaimer line (yellow warning)
     let disclaimer = Paragraph::new(Line::from(vec![
         Span::styled(" ⚠️  ", Style::default().fg(YELLOW).add_modifier(Modifier::BOLD)),
         Span::styled(
@@ -502,7 +433,6 @@ fn draw_disclaimer_and_help(frame: &mut Frame, app: &App, area: ratatui::layout:
 
     frame.render_widget(disclaimer, footer_area);
 
-    // Help bar at very bottom
     if footer_area.height >= 2 {
         let help_area = ratatui::layout::Rect {
             x: footer_area.x,
@@ -514,24 +444,48 @@ fn draw_disclaimer_and_help(frame: &mut Frame, app: &App, area: ratatui::layout:
         let focus_label = match app.focus {
             Focus::Input => "INPUT",
             Focus::Downloads => "DOWNLOADS",
+            Focus::Help => "HELP",
+        };
+
+        let help_badge_style = if app.focus == Focus::Help {
+            Style::default()
+                .fg(DARK_BG)
+                .bg(CYAN)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(CYAN).add_modifier(Modifier::BOLD)
         };
 
         let help = Line::from(vec![
-            Span::styled("[Enter]", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "[Enter]",
+                Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" Download  ", Style::default().fg(WHITE)),
-            Span::styled("[Space]", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "[Space]",
+                Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" Pause  ", Style::default().fg(WHITE)),
-            Span::styled("[Tab]", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "[Tab]",
+                Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" Focus  ", Style::default().fg(WHITE)),
-            Span::styled("[↑↓]", Style::default().fg(GREEN).add_modifier(Modifier::BOLD)),
-            Span::styled(" Scroll  ", Style::default().fg(WHITE)),
-            Span::styled("[Esc]", Style::default().fg(LOGO_PINK).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "[↑↓]",
+                Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" Scroll/Select  ", Style::default().fg(WHITE)),
+            Span::styled(" [HELP] ", help_badge_style),
+            Span::styled(
+                "  [Esc]",
+                Style::default().fg(LOGO_PINK).add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" Quit  ", Style::default().fg(WHITE)),
             Span::styled(
                 format!("▸ {}", focus_label),
-                Style::default()
-                    .fg(MAGENTA)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(MAGENTA).add_modifier(Modifier::BOLD),
             ),
         ]);
 
@@ -540,4 +494,224 @@ fn draw_disclaimer_and_help(frame: &mut Frame, app: &App, area: ratatui::layout:
             help_area,
         );
     }
+}
+
+fn draw_dialog(frame: &mut Frame, app: &App, area: Rect) {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(30),
+            Constraint::Length(12),
+            Constraint::Percentage(30),
+        ])
+        .split(area);
+
+    let popup_area = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(20),
+            Constraint::Percentage(60),
+            Constraint::Percentage(20),
+        ])
+        .split(popup_layout[1])[1];
+
+    frame.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title(Span::styled(
+            " Configure Download ",
+            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+        ))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(CYAN))
+        .style(Style::default().bg(DARK_BG));
+
+    let inner = block.inner(popup_area);
+    frame.render_widget(block, popup_area);
+
+    let mut lines = Vec::new();
+    lines.push(Line::from(""));
+
+    let net_style = if app.dialog_focus == DialogFocus::Network {
+        Style::default().fg(CYAN).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(GRAY)
+    };
+    let net_sel = match app.dialog_network {
+        NetworkMode::Tor => "[ TOR ]  Normal ",
+        NetworkMode::Normal => "  Tor   [ NORMAL ]",
+    };
+    lines.push(Line::from(vec![
+        Span::styled(
+            if app.dialog_focus == DialogFocus::Network {
+                "  > Network:  "
+            } else {
+                "    Network:  "
+            },
+            net_style,
+        ),
+        Span::styled(net_sel, net_style),
+    ]));
+    lines.push(Line::from(""));
+
+    let chk_style = if app.dialog_focus == DialogFocus::Chunks {
+        Style::default().fg(CYAN).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(GRAY)
+    };
+    let c16 = if app.dialog_chunks == 16 {
+        "[16]"
+    } else {
+        " 16 "
+    };
+    let c32 = if app.dialog_chunks == 32 {
+        "[32]"
+    } else {
+        " 32 "
+    };
+    let c64 = if app.dialog_chunks == 64 {
+        "[64]"
+    } else {
+        " 64 "
+    };
+    let c100 = if app.dialog_chunks == 100 {
+        "[100]"
+    } else {
+        " 100 "
+    };
+
+    lines.push(Line::from(vec![
+        Span::styled(
+            if app.dialog_focus == DialogFocus::Chunks {
+                "  > Chunks:   "
+            } else {
+                "    Chunks:   "
+            },
+            chk_style,
+        ),
+        Span::styled(format!("{} {} {} {}", c16, c32, c64, c100), chk_style),
+    ]));
+    lines.push(Line::from(""));
+    lines.push(Line::from(""));
+
+    let start_style = if app.dialog_focus == DialogFocus::Start {
+        Style::default()
+            .fg(DARK_BG)
+            .bg(GREEN)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(GREEN)
+    };
+    let cancel_style = if app.dialog_focus == DialogFocus::Cancel {
+        Style::default()
+            .fg(DARK_BG)
+            .bg(LOGO_PINK)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(LOGO_PINK)
+    };
+
+    let buttons = Line::from(vec![
+        Span::styled("   [ START ]  ", start_style),
+        Span::from("      "),
+        Span::styled("   [ CANCEL ]   ", cancel_style),
+    ]);
+
+    lines.push(buttons);
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "   (Use Arrows/Tab to navigate, Enter to select)",
+        Style::default().fg(DIM_GRAY),
+    )));
+
+    frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), inner);
+}
+
+fn draw_help(frame: &mut Frame, area: Rect) {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(15),
+            Constraint::Length(20),
+            Constraint::Percentage(15),
+        ])
+        .split(area);
+
+    let popup_area = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(15),
+            Constraint::Percentage(70),
+            Constraint::Percentage(15),
+        ])
+        .split(popup_layout[1])[1];
+
+    frame.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title(Span::styled(
+            " 📖 How to Use OnionDownOda ",
+            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+        ))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(MAGENTA))
+        .style(Style::default().bg(DARK_BG));
+
+    let inner = block.inner(popup_area);
+    frame.render_widget(block, popup_area);
+
+    let mut lines = Vec::new();
+    lines.push(Line::from(""));
+
+    let instructions = vec![
+        (
+            "📎 Start Download:",
+            "Paste standard or .onion URL inside the top Input box and hit Enter.",
+        ),
+        (
+            "⚙️ Configurations:",
+            "In the pop-up, you can select whether to force Tor routing or normal.",
+        ),
+        (
+            "🚀 Chunks:",
+            "Select the concurrent thread limits (Parallel downloads). Use Left/Right keys.",
+        ),
+        (
+            "⏸️ Pause/Resume:",
+            "Press Tab to switch to the Downloads pane, use Arrows to select, hit Space.",
+        ),
+        (
+            "❌ Failures/403:",
+            "If a file fails immediately, the host blocked us. Verify the exact direct link.",
+        ),
+        (
+            "📋 Log Output:",
+            "Errors and start states log in the bottom console matrix.",
+        ),
+    ];
+
+    for (cmd, desc) in instructions {
+        lines.push(Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                cmd.to_string(),
+                Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!(" - {}", desc), Style::default().fg(WHITE)),
+        ]));
+        lines.push(Line::from(""));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "   [ Press ESC or Enter to close Help ]",
+        Style::default().fg(LOGO_PINK).add_modifier(Modifier::BOLD),
+    )));
+
+    frame.render_widget(
+        Paragraph::new(lines)
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: false }),
+        inner,
+    );
 }

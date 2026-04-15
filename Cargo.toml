@@ -1,6 +1,6 @@
 [package]
 name = "oniondownoda"
-version = "0.1.1"
+version = "2.0.0"
 edition = "2021"
 description = "🧅 OnionDownOda — A beautiful TUI for downloading files from .onion URLs over Tor"
 license = "MIT"

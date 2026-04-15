@@ -9,41 +9,67 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
 
-/// Number of parallel connections for chunk downloading
-const MAX_CHUNKS: usize = 100;
-/// Minimum chunk size (1 MB) - smaller files use single connection
 const MIN_CHUNK_SIZE: u64 = 1024 * 1024;
+
 #[derive(Debug, Clone)]
 pub enum DownloadProgress {
     Started {
+        id: usize,
         filename: String,
         total_bytes: Option<u64>,
     },
     Progress {
+        id: usize,
         downloaded: u64,
         total: Option<u64>,
     },
     Completed {
+        id: usize,
         filepath: PathBuf,
         total_bytes: u64,
     },
     Failed {
+        id: usize,
         error: String,
     },
 }
 
-/// Extract a usable filename from a URL path segment.
 pub fn extract_filename(url: &str) -> String {
     url.split('/')
         .next_back()
         .and_then(|s| {
             let s = s.split('?').next().unwrap_or(s);
-            if s.is_empty() { None } else { Some(s.to_string()) }
+            if s.is_empty() {
+                None
+            } else {
+                Some(s.to_string())
+            }
         })
         .unwrap_or_else(|| "download".to_string())
 }
 
-/// Check if server supports range requests
+pub async fn extract_filename_safe(url: &str, output_dir: &Path) -> String {
+    let base = extract_filename(url);
+    let mut base_name = base.clone();
+    let mut ext = String::new();
+    if let Some(idx) = base.rfind('.') {
+        ext = base[idx..].to_string();
+        base_name = base[..idx].to_string();
+    }
+
+    let mut name = base.clone();
+    let mut filepath = output_dir.join(&name);
+    let mut counter = 1;
+
+    while fs::try_exists(&filepath).await.unwrap_or(false) {
+        name = format!("{} ({}){}", base_name, counter, ext);
+        filepath = output_dir.join(&name);
+        counter += 1;
+    }
+
+    name
+}
+
 async fn supports_range(client: &Client, url: &str) -> Option<u64> {
     let response = client.head(url).send().await.ok()?;
     if !response.status().is_success() {
@@ -64,7 +90,6 @@ async fn supports_range(client: &Client, url: &str) -> Option<u64> {
     response.content_length()
 }
 
-/// Download a single chunk and return the temp file path
 async fn download_chunk(
     client: Client,
     url: String,
@@ -92,19 +117,18 @@ async fn download_chunk(
     }
 
     let temp_path = temp_dir.join(format!("chunk_{}", chunk_idx));
-    let mut temp_file = fs::File::create(&temp_path).await.map_err(|e| {
-        OnionError::DownloadFailed(format!("Chunk {} temp file: {}", chunk_idx, e))
-    })?;
+    let mut temp_file = fs::File::create(&temp_path)
+        .await
+        .map_err(|e| OnionError::DownloadFailed(format!("Chunk {} temp file: {}", chunk_idx, e)))?;
 
     let mut stream = response.bytes_stream();
     let mut writer = BufWriter::new(&mut temp_file);
 
     while let Some(chunk) = stream.next().await {
-        // Check if paused and wait
         while paused.load(Ordering::Relaxed) {
             sleep(Duration::from_millis(100)).await;
         }
-        
+
         let chunk = chunk.map_err(|e| {
             OnionError::DownloadFailed(format!("Chunk {} stream error: {}", chunk_idx, e))
         })?;
@@ -122,7 +146,7 @@ async fn download_chunk(
     Ok(temp_path)
 }
 
-/// Download file using parallel chunks for maximum speed
+#[allow(clippy::too_many_arguments)]
 async fn download_parallel(
     client: &Client,
     url: &str,
@@ -130,38 +154,41 @@ async fn download_parallel(
     total_size: u64,
     progress_tx: mpsc::UnboundedSender<DownloadProgress>,
     paused: Arc<AtomicBool>,
+    download_id: usize,
+    max_chunks: usize,
 ) -> Result<(), OnionError> {
-    let filename = extract_filename(url);
+    let filename = extract_filename_safe(url, output_dir).await;
     let filepath = output_dir.join(&filename);
 
     fs::create_dir_all(output_dir).await?;
 
-    // Create temp directory for chunks
-    let temp_dir = output_dir.join(format!(".tmp_{}", filename.replace('.', "_")));
+    let temp_dir = output_dir.join(format!(
+        ".tmp_{}_{}",
+        download_id,
+        filename.replace('.', "_")
+    ));
     fs::create_dir_all(&temp_dir).await?;
 
-    // Calculate optimal chunk count (up to MAX_CHUNKS)
-    let optimal_chunks = ((total_size / MIN_CHUNK_SIZE).min(MAX_CHUNKS as u64).max(1)) as usize;
+    let optimal_chunks = ((total_size / MIN_CHUNK_SIZE).min(max_chunks as u64).max(1)) as usize;
     let chunk_size = total_size / optimal_chunks as u64;
 
     let _ = progress_tx.send(DownloadProgress::Started {
+        id: download_id,
         filename: filename.clone(),
         total_bytes: Some(total_size),
     });
 
-    // Create chunk ranges
     let mut chunks: Vec<(u64, u64)> = Vec::with_capacity(optimal_chunks);
     for i in 0..optimal_chunks {
         let start = i as u64 * chunk_size;
         let end = if i == optimal_chunks - 1 {
-            total_size - 1 // Last chunk goes to end
+            total_size - 1
         } else {
             (i as u64 + 1) * chunk_size - 1
         };
         chunks.push((start, end));
     }
 
-    // Spawn parallel downloads
     let mut handles = Vec::new();
     for (idx, (start, end)) in chunks.into_iter().enumerate() {
         let client = client.clone();
@@ -174,58 +201,82 @@ async fn download_parallel(
         handles.push(handle);
     }
 
-    // Collect all temp file paths
     let mut temp_paths: Vec<PathBuf> = Vec::with_capacity(optimal_chunks);
     for handle in handles {
-        let temp_path = handle
+        let res = handle
             .await
-            .map_err(|e| OnionError::DownloadFailed(format!("Join error: {}", e)))??;
-        temp_paths.push(temp_path);
+            .map_err(|e| OnionError::DownloadFailed(format!("Join error: {}", e)));
+        match res {
+            Ok(Ok(temp_path)) => temp_paths.push(temp_path),
+            Ok(Err(e)) => {
+                let _ = fs::remove_dir_all(&temp_dir).await;
+                return Err(e);
+            }
+            Err(e) => {
+                let _ = fs::remove_dir_all(&temp_dir).await;
+                return Err(e);
+            }
+        }
     }
 
-    // Merge chunks into final file
-    let mut output_file = fs::File::create(&filepath).await?;
+    let output_file_res = fs::File::create(&filepath).await;
+    if output_file_res.is_err() {
+        let _ = fs::remove_dir_all(&temp_dir).await;
+        return Err(OnionError::DownloadFailed(
+            "Failed to create final file".to_string(),
+        ));
+    }
+    let mut output_file = output_file_res.unwrap();
+
     let mut total_downloaded: u64 = 0;
 
     for chunk_path in &temp_paths {
-        let mut chunk_file = fs::File::open(chunk_path).await?;
-        let mut buffer = vec![0u8; 64 * 1024]; // 64KB read buffer
+        let chunk_file_res = fs::File::open(chunk_path).await;
+        if chunk_file_res.is_err() {
+            let _ = fs::remove_dir_all(&temp_dir).await;
+            return Err(OnionError::DownloadFailed(
+                "Failed to read chunk".to_string(),
+            ));
+        }
+        let mut chunk_file = chunk_file_res.unwrap();
+        let mut buffer = vec![0u8; 64 * 1024];
 
         loop {
-            // Check if paused during merge
             while paused.load(Ordering::Relaxed) {
                 sleep(Duration::from_millis(100)).await;
             }
-            
+
             match chunk_file.read(&mut buffer).await {
                 Ok(0) => break,
                 Ok(n) => {
-                    output_file
-                        .write_all(&buffer[..n])
-                        .await
-                        .map_err(|e| OnionError::DownloadFailed(format!("Write error: {}", e)))?;
+                    if let Err(e) = output_file.write_all(&buffer[..n]).await {
+                        let _ = fs::remove_dir_all(&temp_dir).await;
+                        return Err(OnionError::DownloadFailed(format!("Write error: {}", e)));
+                    }
                     total_downloaded += n as u64;
                     let _ = progress_tx.send(DownloadProgress::Progress {
+                        id: download_id,
                         downloaded: total_downloaded,
                         total: Some(total_size),
                     });
                 }
                 Err(e) => {
+                    let _ = fs::remove_dir_all(&temp_dir).await;
                     return Err(OnionError::DownloadFailed(format!("Read error: {}", e)));
                 }
             }
         }
     }
 
-    output_file.flush().await?;
-
-    // Clean up temp files and directory
-    for chunk_path in temp_paths {
-        let _ = fs::remove_file(&chunk_path).await;
+    if let Err(e) = output_file.flush().await {
+        let _ = fs::remove_dir_all(&temp_dir).await;
+        return Err(OnionError::DownloadFailed(format!("Flush error: {}", e)));
     }
-    let _ = fs::remove_dir(&temp_dir).await;
+
+    let _ = fs::remove_dir_all(&temp_dir).await;
 
     let _ = progress_tx.send(DownloadProgress::Completed {
+        id: download_id,
         filepath,
         total_bytes: total_downloaded,
     });
@@ -233,13 +284,13 @@ async fn download_parallel(
     Ok(())
 }
 
-/// Fallback: Single-threaded download for servers without range support
 async fn download_single(
     client: &Client,
     url: &str,
     output_dir: &Path,
     progress_tx: mpsc::UnboundedSender<DownloadProgress>,
     paused: Arc<AtomicBool>,
+    download_id: usize,
 ) -> Result<(), OnionError> {
     let response = client
         .get(url)
@@ -249,12 +300,15 @@ async fn download_single(
 
     if !response.status().is_success() {
         let err = format!("HTTP {}", response.status());
-        let _ = progress_tx.send(DownloadProgress::Failed { error: err.clone() });
+        let _ = progress_tx.send(DownloadProgress::Failed {
+            id: download_id,
+            error: err.clone(),
+        });
         return Err(OnionError::DownloadFailed(err));
     }
 
     let total_bytes = response.content_length();
-    let filename = extract_filename(url);
+    let filename = extract_filename_safe(url, output_dir).await;
 
     fs::create_dir_all(output_dir).await?;
 
@@ -263,6 +317,7 @@ async fn download_single(
     let mut writer = BufWriter::new(file);
 
     let _ = progress_tx.send(DownloadProgress::Started {
+        id: download_id,
         filename: filename.clone(),
         total_bytes,
     });
@@ -271,16 +326,16 @@ async fn download_single(
     let mut downloaded: u64 = 0;
 
     while let Some(chunk) = stream.next().await {
-        // Check if paused and wait
         while paused.load(Ordering::Relaxed) {
             sleep(Duration::from_millis(100)).await;
         }
-        
+
         let chunk = chunk.map_err(|e| OnionError::DownloadFailed(e.to_string()))?;
         writer.write_all(&chunk).await?;
         downloaded += chunk.len() as u64;
 
         let _ = progress_tx.send(DownloadProgress::Progress {
+            id: download_id,
             downloaded,
             total: total_bytes,
         });
@@ -289,6 +344,7 @@ async fn download_single(
     writer.flush().await?;
 
     let _ = progress_tx.send(DownloadProgress::Completed {
+        id: download_id,
         filepath,
         total_bytes: downloaded,
     });
@@ -296,23 +352,30 @@ async fn download_single(
     Ok(())
 }
 
-/// Download a file from a URL through the Tor proxy.
-/// Uses parallel chunk downloading (up to 100 connections) if server supports Range requests.
 pub async fn download_file(
     client: &Client,
     url: &str,
     output_dir: &Path,
     progress_tx: mpsc::UnboundedSender<DownloadProgress>,
     paused: Arc<AtomicBool>,
+    download_id: usize,
+    max_chunks: usize,
 ) -> Result<(), OnionError> {
-    // Check if parallel download is possible (server supports ranges and file is large enough)
     if let Some(total_size) = supports_range(client, url).await {
-        // Use parallel chunks for files >= MIN_CHUNK_SIZE (1 MB)
         if total_size >= MIN_CHUNK_SIZE {
-            return download_parallel(client, url, output_dir, total_size, progress_tx, paused).await;
+            return download_parallel(
+                client,
+                url,
+                output_dir,
+                total_size,
+                progress_tx,
+                paused,
+                download_id,
+                max_chunks,
+            )
+            .await;
         }
     }
 
-    // Fallback to single-threaded download
-    download_single(client, url, output_dir, progress_tx, paused).await
+    download_single(client, url, output_dir, progress_tx, paused, download_id).await
 }
