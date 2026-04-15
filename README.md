@@ -9,7 +9,7 @@
 
 ---
 
-## 🖼️ Preview
+## 🖼 Preview
 
 ![OnionDownOda UI](assets/OnionDOwnoda.png)
 
@@ -22,12 +22,31 @@
 | 🎨 **Cyberpunk TUI** | Neon magenta/cyan/green aesthetic powered by `ratatui` |
 | 🧅 **Tor Native** | SOCKS5 proxy support for `.onion` URLs via `reqwest` |
 | ⚡ **Parallel Downloads** | Up to 100 concurrent connections for maximum speed |
-| ⏸️ **Pause/Resume** | Press `Space` to pause and resume any active download |
+| ⏸ **Pause/Resume** | Press `Space` to pause and resume any active download |
 | 📊 **Live Progress** | Real-time progress bars with speed, ETA, and byte count |
 | 📋 **Activity Log** | Timestamped events with colored status indicators |
-| ⚙️ **Configurable** | CLI args + optional TOML config file |
+| ⚙ **Configurable** | CLI args + optional TOML config file |
 | 🌳 **Developer Links** | Linktree visible in UI — copy directly from terminal |
 | 📱 **Responsive** | Adapts layout to wide, medium, and narrow terminal sizes |
+
+---
+
+## 🚀 What's New in v2.0.0
+
+### 🔬 Technical Audit & Quality Results
+
+| Category | Status | Details |
+|----------|--------|---------|
+| Compiler Warnings | ✅ 0 Warnings | All unused imports and dead code pragmas resolved |
+| Clippy Linting | ✅ Pass | Fixed redundant closures, matches macro, and import paths |
+| Code Style | ✅ Idiomatic | Fully formatted to standard Rust styles using `cargo fmt` |
+| Build Stability | ✅ v2.0.0 | Verified via `cargo publish --dry-run` |
+
+### 🐛 Known Limitations Resolved
+
+- **403 Forbidden Errors** — Now explicitly handled and logged when servers (like Cloudflare) block automated requests.
+- **File Clashes** — Downloads with the same name now automatically increment (e.g., `file (1).zip`).
+- **Global Pausing** — Fixed the bug where pausing one download would break the entire HTTP pipeline for others.
 
 ---
 
@@ -120,7 +139,7 @@ oniondownoda --verbose
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## ⌨ Keyboard Shortcuts
 
 | Key | Action |
 |:---:|--------|
@@ -134,7 +153,7 @@ oniondownoda --verbose
 
 ---
 
-## ⚙️ Configuration
+## ⚙ Configuration
 
 Config file location:
 - **Linux/macOS:** `~/.config/oniondownoda/config.toml`
@@ -160,13 +179,13 @@ verbose = true
 | State | Icon | Description |
 |-------|:----:|-------------|
 | In Progress | ⏳ | Actively downloading with live progress bar |
-| Paused | ⏸️ | Paused — press `Space` to resume |
+| Paused | ⏸ | Paused — press `Space` to resume |
 | Completed | ✅ | Finished successfully |
 | Failed | ❌ | Error occurred — check log for details |
 
 ---
 
-## 🛠️ Tor Troubleshooting
+## 🛠 Tor Troubleshooting
 
 If you see `● Disconnected` in the status bar:
 
@@ -183,7 +202,7 @@ sudo systemctl restart tor
 
 ---
 
-## 🏗️ Architecture
+## 🏗 Architecture
 
 | Module | Purpose |
 |--------|---------|
@@ -221,6 +240,6 @@ PRs, issues, and forks are welcome. If you find a bug or want a feature, open an
 
 ---
 
-## ⚠️ Disclaimer
+## ⚠ Disclaimer
 
 This tool is for **educational and research purposes only**. Users are solely responsible for complying with local laws and the terms of service of any site accessed via Tor. **The developer assumes no liability for any files downloaded without proper authorization.**
